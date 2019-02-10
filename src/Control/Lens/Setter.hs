@@ -55,7 +55,7 @@ module Control.Lens.Setter
   , (+~), (-~), (*~), (//~), (^~), (^^~), (**~), (||~), (<>~), (&&~), (<.~), (?~), (<?~)
   -- * State Combinators
   , assign, modifying
-  , (.=), (%=)
+  , (.=), (%=), (|%=)
   , (+=), (-=), (*=), (//=), (^=), (^^=), (**=), (||=), (<>=), (&&=), (<.=), (?=), (<?=)
   , (<~)
   -- * Writer Combinators
@@ -84,6 +84,7 @@ import Control.Lens.Internal.Indexed
 import Control.Lens.Internal.Setter
 import Control.Lens.Type
 import Control.Monad (liftM)
+import Control.Monad.State (State, evalState)
 import Control.Monad.State.Class as State
 import Control.Monad.Writer.Class as Writer
 import Data.Functor.Contravariant
@@ -806,6 +807,21 @@ l %= f = State.modify (l %~ f)
 modifying :: MonadState s m => ASetter s s a b -> (a -> b) -> m ()
 modifying l f = State.modify (over l f)
 {-# INLINE modifying #-}
+
+-- | Locally modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' for a single function
+-- applied to the supplied monadic state, returning the original state before modification. The '|%='
+-- operator is a mnemonic device intended to mean 'restricted modification'.
+--
+--
+-- @
+-- ('|%=') :: 'MonadState' s m => 'Setter'' s 'Bool'    -> (a -> b) -> State t r -> m r
+-- ('|%=') :: 'MonadState' s m => 'Iso'' s 'Bool'       -> (a -> b) -> State t r -> m r
+-- ('|%=') :: 'MonadState' s m => 'Lens'' s 'Bool'      -> (a -> b) -> State t r -> m r
+-- ('|%=') :: 'MonadState' s m => 'Traversal'' s 'Bool' -> (a -> b) -> State t r -> m r
+-- @
+(|%=) :: MonadState s m => ASetter s t a b -> (a -> b) -> State t r -> m r
+(|%=) l f r = State.gets (evalState r . (over l f))
+{-# INLINE (|%=) #-}
 
 -- | Replace the target of a 'Lens' or all of the targets of a 'Setter' or 'Traversal' in our monadic
 -- state with 'Just' a new value, irrespective of the old.
