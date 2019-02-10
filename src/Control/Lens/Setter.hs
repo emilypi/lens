@@ -820,7 +820,7 @@ modifying l f = State.modify (over l f)
 -- ('|%=') :: 'MonadState' s m => 'Traversal'' s 'Bool' -> (a -> b) -> State t r -> m r
 -- @
 (|%=) :: MonadState s m => ASetter s t a b -> (a -> b) -> State t r -> m r
-(|%=) l f r = State.gets (evalState r . (over l f))
+(|%=) l f t = State.gets (evalState t . over l f)
 {-# INLINE (|%=) #-}
 
 -- | Replace the target of a 'Lens' or all of the targets of a 'Setter' or 'Traversal' in our monadic
