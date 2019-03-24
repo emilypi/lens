@@ -53,6 +53,8 @@ import Control.Lens.Type
 import Control.Lens.Internal.Coerce
 import qualified Data.ByteString      as StrictB
 import qualified Data.ByteString.Lazy as LazyB
+import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Monoid
 import qualified Data.Sequence as Seq
 import           Data.Sequence hiding ((<|), (|>), (:<), (:>))
@@ -114,6 +116,7 @@ class Cons s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- '_Cons' :: 'Prism'' 'String' ('Char', 'String')
   -- '_Cons' :: 'Prism'' 'StrictT.Text' ('Char', 'StrictT.Text')
   -- '_Cons' :: 'Prism'' 'StrictB.ByteString' ('Word8', 'StrictB.ByteString')
+  -- '_Cons' :: 'Prism'' ('NonEmpty' a) a'
   -- @
   _Cons :: Prism s t (a,s) (b,t)
 
@@ -123,13 +126,18 @@ instance Cons [a] [b] a b where
     []     -> Left  []
   {-# INLINE _Cons #-}
 
+instance Cons (NonEmpty a) (NonEmpty a) a a where
+  _Cons = prism (uncurry NonEmpty.cons) $ \aas ->
+    case NonEmpty.uncons aas of
+      (a, Nothing) -> Left (a :| [])
+      (a, Just as) -> Right (a, as)
+
 instance Cons (ZipList a) (ZipList b) a b where
   _Cons = withPrism listCons $ \listReview listPreview ->
     prism (coerce' listReview) (coerce' listPreview) where
 
     listCons :: Prism [a] [b] (a, [a]) (b, [b])
     listCons = _Cons
-
   {-# INLINE _Cons #-}
 
 instance Cons (Seq a) (Seq b) a b where
@@ -348,6 +356,7 @@ class Snoc s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- '_Snoc' :: 'Prism'' 'String' ('String', 'Char')
   -- '_Snoc' :: 'Prism'' 'StrictT.Text' ('StrictT.Text', 'Char')
   -- '_Snoc' :: 'Prism'' 'StrictB.ByteString' ('StrictB.ByteString', 'Word8')
+  -- '_Snoc' :: 'Prism'' ('NonEmpty' a) a
   -- @
   _Snoc :: Prism s t (s,a) (t,b)
 
@@ -356,6 +365,12 @@ instance Snoc [a] [b] a b where
     then Left []
     else Right (Prelude.init aas, Prelude.last aas)
   {-# INLINE _Snoc #-}
+
+instance Snoc (NonEmpty a) (NonEmpty a) a a where
+  _Snoc = prism (\(as,a) -> as <> (a:|[])) $ \aas ->
+    case NonEmpty.uncons aas of
+      (a, Nothing) -> Left (a:|[])
+      (a, Just as) -> Right (a :| NonEmpty.init as, NonEmpty.last as)
 
 instance Snoc (ZipList a) (ZipList b) a b where
   _Snoc = withPrism listSnoc $ \listReview listPreview ->
