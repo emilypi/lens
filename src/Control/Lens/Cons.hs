@@ -116,7 +116,7 @@ class Cons s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- '_Cons' :: 'Prism'' 'String' ('Char', 'String')
   -- '_Cons' :: 'Prism'' 'StrictT.Text' ('Char', 'StrictT.Text')
   -- '_Cons' :: 'Prism'' 'StrictB.ByteString' ('Word8', 'StrictB.ByteString')
-  -- '_Cons' :: 'Prism'' ('NonEmpty' a) a'
+  -- '_Cons' :: 'Prism'' ('NonEmpty' a) (a, 'NonEmpty' a)
   -- @
   _Cons :: Prism s t (a,s) (b,t)
 
@@ -286,6 +286,7 @@ uncons = simply preview _Cons
 -- '_head' :: 'Traversal'' [a] a
 -- '_head' :: 'Traversal'' ('Seq' a) a
 -- '_head' :: 'Traversal'' ('Vector' a) a
+-- '_head' :: 'Traversal'' ('NonEmpty' a) a
 -- @
 _head :: Cons s s a a => Traversal' s a
 _head = _Cons._1
@@ -335,6 +336,7 @@ _head = _Cons._1
 -- '_tail' :: 'Traversal'' [a] [a]
 -- '_tail' :: 'Traversal'' ('Seq' a) ('Seq' a)
 -- '_tail' :: 'Traversal'' ('Vector' a) ('Vector' a)
+-- '_tail' :: 'Traversal'' ('NonEmpty' a) ('NonEmpty' a)
 -- @
 _tail :: Cons s s a a => Traversal' s s
 _tail = _Cons._2
@@ -356,7 +358,7 @@ class Snoc s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- '_Snoc' :: 'Prism'' 'String' ('String', 'Char')
   -- '_Snoc' :: 'Prism'' 'StrictT.Text' ('StrictT.Text', 'Char')
   -- '_Snoc' :: 'Prism'' 'StrictB.ByteString' ('StrictB.ByteString', 'Word8')
-  -- '_Snoc' :: 'Prism'' ('NonEmpty' a) a
+  -- '_Snoc' :: 'Prism'' ('NonEmpty' a) ('NonEmpty' a, a)
   -- @
   _Snoc :: Prism s t (s,a) (t,b)
 
@@ -468,6 +470,7 @@ instance Snoc LazyT.Text LazyT.Text Char Char where
 -- '_init' :: 'Traversal'' [a] [a]
 -- '_init' :: 'Traversal'' ('Seq' a) ('Seq' a)
 -- '_init' :: 'Traversal'' ('Vector' a) ('Vector' a)
+-- '_init' :: 'Traversal'' ('NonEmpty' a) ('NonEmpty' a)
 -- @
 _init :: Snoc s s a a => Traversal' s s
 _init = _Snoc._1
@@ -511,6 +514,7 @@ _init = _Snoc._1
 -- '_last' :: 'Traversal'' [a] a
 -- '_last' :: 'Traversal'' ('Seq' a) a
 -- '_last' :: 'Traversal'' ('Vector' a) a
+-- '_last' :: 'Traversal'' ('NonEmpty' a) ('NonEmpty' a)
 -- @
 _last :: Snoc s s a a => Traversal' s a
 _last = _Snoc._2
