@@ -117,6 +117,11 @@ class Cons s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- @
   _Cons :: Prism s t (a,s) (b,t)
 
+instance Cons (Maybe a) (Maybe b) a b where
+  _Cons = prism (Just . fst) $ \aas -> case aas of
+    Nothing -> Left Nothing
+    Just a -> Right (a, Nothing)
+
 instance Cons [a] [b] a b where
   _Cons = prism (uncurry (:)) $ \ aas -> case aas of
     (a:as) -> Right (a, as)
@@ -351,6 +356,11 @@ class Snoc s t a b | s -> a, t -> b, s b -> t, t a -> s where
   -- @
   _Snoc :: Prism s t (s,a) (t,b)
 
+instance Snoc (Maybe a) (Maybe b) a b where
+  _Snoc = prism (Just . snd) $ \aas -> case aas of
+    Nothing -> Left Nothing
+    Just a -> Right (Nothing, a)
+
 instance Snoc [a] [b] a b where
   _Snoc = prism (\(as,a) -> as Prelude.++ [a]) $ \aas -> if Prelude.null aas
     then Left []
@@ -359,10 +369,10 @@ instance Snoc [a] [b] a b where
 
 instance Snoc (ZipList a) (ZipList b) a b where
   _Snoc = withPrism listSnoc $ \listReview listPreview ->
-    prism (coerce' listReview) (coerce' listPreview) where
-
-    listSnoc :: Prism [a] [b] ([a], a) ([b], b)
-    listSnoc = _Snoc
+      prism (coerce' listReview) (coerce' listPreview)
+    where
+      listSnoc :: Prism [a] [b] ([a], a) ([b], b)
+      listSnoc = _Snoc
 
   {-# INLINE _Snoc #-}
 
