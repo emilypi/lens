@@ -55,6 +55,12 @@ module Control.Lens.Setter
   , (.=), (%=)
   , (+=), (-=), (*=), (//=), (^=), (^^=), (**=), (||=), (<>=), (&&=), (<.=), (?=), (<?=)
   , (<~)
+  -- ** Strict State Combinators
+  , assign', modifying'
+  , (!=), (%!=)
+  , (+!=), (-!=), (*!=), (//!=), (^!=), (^^!=), (**!=)
+  , (||!=), (<>!=), (&&!=), (<!=), (?!=), (<?!=)
+  , (<!~)
   -- * Writer Combinators
   , scribe
   , passing, ipassing
@@ -112,6 +118,7 @@ import Control.Monad.Writer.Class as Writer
 
 infixr 4 %@~, .@~, .~, +~, *~, -~, //~, ^~, ^^~, **~, &&~, <>~, ||~, %~, <.~, ?~, <?~
 infix  4 %@=, .@=, .=, +=, *=, -=, //=, ^=, ^^=, **=, &&=, <>=, ||=, %=, <.=, ?=, <?=
+infix  4 !=, %!=, +!=, -!=, *!=, //!=, ^!=, ^^!=, **!=, ||!=, <>!=, &&!=, <!=, ?!=, <?!=
 infixr 2 <~
 
 ------------------------------------------------------------------------------
@@ -1074,6 +1081,333 @@ l <>~ n = over l (<> n)
 (<>=) :: (MonadState s m, Semigroup a) => ASetter' s a -> a -> m ()
 l <>= a = State.modify (l <>~ a)
 {-# INLINE (<>=) #-}
+
+------------------------------------------------------------------------------
+-- Using Setters with Strict State Modification
+------------------------------------------------------------------------------
+
+-- | Replace the target of a 'Lens' or all of the targets of a 'Setter' or 'Traversal' in our monadic
+-- state with a new value, irrespective of the old.
+--
+-- This is an alias for ('!=').
+--
+-- >>> execState (do assign' _1 c; assign _2 d) (a,b)
+-- (c,d)
+--
+-- >>> execState (both != c) (a,b)
+-- (c,c)
+--
+-- @
+-- 'assign'' :: 'MonadState' s m => 'Iso'' s a       -> a -> m ()
+-- 'assign'' :: 'MonadState' s m => 'Lens'' s a      -> a -> m ()
+-- 'assign'' :: 'MonadState' s m => 'Traversal'' s a -> a -> m ()
+-- 'assign'' :: 'MonadState' s m => 'Setter'' s a    -> a -> m ()
+-- @
+assign' :: MonadState s m => ASetter s s a b -> b -> m ()
+assign' l b = State.modify' (set l b)
+{-# INLINE assign' #-}
+
+-- | Replace the target of a 'Lens' or all of the targets of a 'Setter'
+-- or 'Traversal' in our monadic state with a new value, irrespective of the
+-- old.
+--
+-- This is an infix version of 'assign'.
+--
+-- >>> execState (do _1 .= c; _2 .= d) (a,b)
+-- (c,d)
+--
+-- >>> execState (both .= c) (a,b)
+-- (c,c)
+--
+-- @
+-- ('.=') :: 'MonadState' s m => 'Iso'' s a       -> a -> m ()
+-- ('.=') :: 'MonadState' s m => 'Lens'' s a      -> a -> m ()
+-- ('.=') :: 'MonadState' s m => 'Traversal'' s a -> a -> m ()
+-- ('.=') :: 'MonadState' s m => 'Setter'' s a    -> a -> m ()
+-- @
+--
+-- /It puts the state in the monad or it gets the hose again./
+(!=) :: MonadState s m => ASetter s s a b -> b -> m ()
+l != b = State.modify' (l .~ b)
+{-# INLINE (!=) #-}
+
+-- | Map over the target of a 'Lens' or all of the targets of a 'Setter' or 'Traversal' in our monadic state.
+--
+-- >>> execState (do _1 %= f;_2 %= g) (a,b)
+-- (f a,g b)
+--
+-- >>> execState (do both %= f) (a,b)
+-- (f a,f b)
+--
+-- @
+-- ('%=') :: 'MonadState' s m => 'Iso'' s a       -> (a -> a) -> m ()
+-- ('%=') :: 'MonadState' s m => 'Lens'' s a      -> (a -> a) -> m ()
+-- ('%=') :: 'MonadState' s m => 'Traversal'' s a -> (a -> a) -> m ()
+-- ('%=') :: 'MonadState' s m => 'Setter'' s a    -> (a -> a) -> m ()
+-- @
+--
+-- @
+-- ('%=') :: 'MonadState' s m => 'ASetter' s s a b -> (a -> b) -> m ()
+-- @
+(%!=) :: MonadState s m => ASetter s s a b -> (a -> b) -> m ()
+l %!= f = State.modify' (l %~ f)
+{-# INLINE (%!=) #-}
+
+-- | This is an alias for ('%=').
+modifying' :: MonadState s m => ASetter s s a b -> (a -> b) -> m ()
+modifying' l f = State.modify' (over l f)
+{-# INLINE modifying' #-}
+
+-- | Replace the target of a 'Lens' or all of the targets of a 'Setter' or 'Traversal' in our monadic
+-- state with 'Just' a new value, irrespective of the old.
+--
+-- >>> execState (do at 1 ?= a; at 2 ?= b) Map.empty
+-- fromList [(1,a),(2,b)]
+--
+-- >>> execState (do _1 ?= b; _2 ?= c) (Just a, Nothing)
+-- (Just b,Just c)
+--
+-- @
+-- ('?=') :: 'MonadState' s m => 'Iso'' s ('Maybe' a)       -> a -> m ()
+-- ('?=') :: 'MonadState' s m => 'Lens'' s ('Maybe' a)      -> a -> m ()
+-- ('?=') :: 'MonadState' s m => 'Traversal'' s ('Maybe' a) -> a -> m ()
+-- ('?=') :: 'MonadState' s m => 'Setter'' s ('Maybe' a)    -> a -> m ()
+-- @
+(?!=) :: MonadState s m => ASetter s s a (Maybe b) -> b -> m ()
+l ?!= b = State.modify' (l ?~ b)
+{-# INLINE (?!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by adding a value.
+--
+-- Example:
+--
+-- @
+-- 'fresh' :: 'MonadState' 'Int' m => m 'Int'
+-- 'fresh' = do
+--   'id' '+=' 1
+--   'Control.Lens.Getter.use' 'id'
+-- @
+--
+-- >>> execState (do _1 += c; _2 += d) (a,b)
+-- (a + c,b + d)
+--
+-- >>> execState (do _1.at 1.non 0 += 10) (Map.fromList [(2,100)],"hello")
+-- (fromList [(1,10),(2,100)],"hello")
+--
+-- @
+-- ('+=') :: ('MonadState' s m, 'Num' a) => 'Setter'' s a    -> a -> m ()
+-- ('+=') :: ('MonadState' s m, 'Num' a) => 'Iso'' s a       -> a -> m ()
+-- ('+=') :: ('MonadState' s m, 'Num' a) => 'Lens'' s a      -> a -> m ()
+-- ('+=') :: ('MonadState' s m, 'Num' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(+!=) :: (MonadState s m, Num a) => ASetter' s a -> a -> m ()
+l +!= b = State.modify' (l +~ b)
+{-# INLINE (+!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by subtracting a value.
+--
+-- >>> execState (do _1 -= c; _2 -= d) (a,b)
+-- (a - c,b - d)
+--
+-- @
+-- ('-=') :: ('MonadState' s m, 'Num' a) => 'Setter'' s a    -> a -> m ()
+-- ('-=') :: ('MonadState' s m, 'Num' a) => 'Iso'' s a       -> a -> m ()
+-- ('-=') :: ('MonadState' s m, 'Num' a) => 'Lens'' s a      -> a -> m ()
+-- ('-=') :: ('MonadState' s m, 'Num' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(-!=) :: (MonadState s m, Num a) => ASetter' s a -> a -> m ()
+l -!= b = State.modify' (l -~ b)
+{-# INLINE (-!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by multiplying by value.
+--
+-- >>> execState (do _1 *= c; _2 *= d) (a,b)
+-- (a * c,b * d)
+--
+-- @
+-- ('*=') :: ('MonadState' s m, 'Num' a) => 'Setter'' s a    -> a -> m ()
+-- ('*=') :: ('MonadState' s m, 'Num' a) => 'Iso'' s a       -> a -> m ()
+-- ('*=') :: ('MonadState' s m, 'Num' a) => 'Lens'' s a      -> a -> m ()
+-- ('*=') :: ('MonadState' s m, 'Num' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(*!=) :: (MonadState s m, Num a) => ASetter' s a -> a -> m ()
+l *!= b = State.modify' (l *~ b)
+{-# INLINE (*!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by dividing by a value.
+--
+-- >>> execState (do _1 //= c; _2 //= d) (a,b)
+-- (a / c,b / d)
+--
+-- @
+-- ('//=') :: ('MonadState' s m, 'Fractional' a) => 'Setter'' s a    -> a -> m ()
+-- ('//=') :: ('MonadState' s m, 'Fractional' a) => 'Iso'' s a       -> a -> m ()
+-- ('//=') :: ('MonadState' s m, 'Fractional' a) => 'Lens'' s a      -> a -> m ()
+-- ('//=') :: ('MonadState' s m, 'Fractional' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(//!=) :: (MonadState s m, Fractional a) => ASetter' s a -> a -> m ()
+l //!= a = State.modify' (l //~ a)
+{-# INLINE (//!=) #-}
+
+-- | Raise the target(s) of a numerically valued 'Lens', 'Setter' or 'Traversal' to a non-negative integral power.
+--
+-- @
+-- ('^=') ::  ('MonadState' s m, 'Num' a, 'Integral' e) => 'Setter'' s a    -> e -> m ()
+-- ('^=') ::  ('MonadState' s m, 'Num' a, 'Integral' e) => 'Iso'' s a       -> e -> m ()
+-- ('^=') ::  ('MonadState' s m, 'Num' a, 'Integral' e) => 'Lens'' s a      -> e -> m ()
+-- ('^=') ::  ('MonadState' s m, 'Num' a, 'Integral' e) => 'Traversal'' s a -> e -> m ()
+-- @
+(^!=) :: (MonadState s m, Num a, Integral e) => ASetter' s a -> e -> m ()
+l ^!= e = State.modify' (l ^~ e)
+{-# INLINE (^!=) #-}
+
+-- | Raise the target(s) of a numerically valued 'Lens', 'Setter' or 'Traversal' to an integral power.
+--
+-- @
+-- ('^^=') ::  ('MonadState' s m, 'Fractional' a, 'Integral' e) => 'Setter'' s a    -> e -> m ()
+-- ('^^=') ::  ('MonadState' s m, 'Fractional' a, 'Integral' e) => 'Iso'' s a       -> e -> m ()
+-- ('^^=') ::  ('MonadState' s m, 'Fractional' a, 'Integral' e) => 'Lens'' s a      -> e -> m ()
+-- ('^^=') ::  ('MonadState' s m, 'Fractional' a, 'Integral' e) => 'Traversal'' s a -> e -> m ()
+-- @
+(^^!=) :: (MonadState s m, Fractional a, Integral e) => ASetter' s a -> e -> m ()
+l ^^!= e = State.modify' (l ^^~ e)
+{-# INLINE (^^!=) #-}
+
+-- | Raise the target(s) of a numerically valued 'Lens', 'Setter' or 'Traversal' to an arbitrary power
+--
+-- >>> execState (do _1 **= c; _2 **= d) (a,b)
+-- (a**c,b**d)
+--
+-- @
+-- ('**=') ::  ('MonadState' s m, 'Floating' a) => 'Setter'' s a    -> a -> m ()
+-- ('**=') ::  ('MonadState' s m, 'Floating' a) => 'Iso'' s a       -> a -> m ()
+-- ('**=') ::  ('MonadState' s m, 'Floating' a) => 'Lens'' s a      -> a -> m ()
+-- ('**=') ::  ('MonadState' s m, 'Floating' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(**!=) :: (MonadState s m, Floating a) => ASetter' s a -> a -> m ()
+l **!= a = State.modify' (l **~ a)
+{-# INLINE (**!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by taking their logical '&&' with a value.
+--
+-- >>> execState (do _1 &&= True; _2 &&= False; _3 &&= True; _4 &&= False) (True,True,False,False)
+-- (True,False,False,False)
+--
+-- @
+-- ('&&=') :: 'MonadState' s m => 'Setter'' s 'Bool'    -> 'Bool' -> m ()
+-- ('&&=') :: 'MonadState' s m => 'Iso'' s 'Bool'       -> 'Bool' -> m ()
+-- ('&&=') :: 'MonadState' s m => 'Lens'' s 'Bool'      -> 'Bool' -> m ()
+-- ('&&=') :: 'MonadState' s m => 'Traversal'' s 'Bool' -> 'Bool' -> m ()
+-- @
+(&&!=):: MonadState s m => ASetter' s Bool -> Bool -> m ()
+l &&!= b = State.modify' (l &&~ b)
+{-# INLINE (&&!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso, 'Setter' or 'Traversal' by taking their logical '||' with a value.
+--
+-- >>> execState (do _1 ||= True; _2 ||= False; _3 ||= True; _4 ||= False) (True,True,False,False)
+-- (True,True,True,False)
+--
+-- @
+-- ('||=') :: 'MonadState' s m => 'Setter'' s 'Bool'    -> 'Bool' -> m ()
+-- ('||=') :: 'MonadState' s m => 'Iso'' s 'Bool'       -> 'Bool' -> m ()
+-- ('||=') :: 'MonadState' s m => 'Lens'' s 'Bool'      -> 'Bool' -> m ()
+-- ('||=') :: 'MonadState' s m => 'Traversal'' s 'Bool' -> 'Bool' -> m ()
+-- @
+(||!=) :: MonadState s m => ASetter' s Bool -> Bool -> m ()
+l ||!= b = State.modify' (l ||~ b)
+{-# INLINE (||!=) #-}
+
+-- | Run a monadic action, and set all of the targets of a 'Lens', 'Setter' or 'Traversal' to its result.
+--
+-- @
+-- ('<~') :: 'MonadState' s m => 'Iso' s s a b       -> m b -> m ()
+-- ('<~') :: 'MonadState' s m => 'Lens' s s a b      -> m b -> m ()
+-- ('<~') :: 'MonadState' s m => 'Traversal' s s a b -> m b -> m ()
+-- ('<~') :: 'MonadState' s m => 'Setter' s s a b    -> m b -> m ()
+-- @
+--
+-- As a reasonable mnemonic, this lets you store the result of a monadic action in a 'Lens' rather than
+-- in a local variable.
+--
+-- @
+-- do foo <- bar
+--    ...
+-- @
+--
+-- will store the result in a variable, while
+--
+-- @
+-- do foo '<~' bar
+--    ...
+-- @
+--
+-- will store the result in a 'Lens', 'Setter', or 'Traversal'.
+(<!~) :: MonadState s m => ASetter s s a b -> m b -> m ()
+l <!~ mb = mb >>= (l !=)
+{-# INLINE (<!~) #-}
+
+-- | Set with pass-through
+--
+-- This is useful for chaining assignment without round-tripping through your 'Monad' stack.
+--
+-- @
+-- do x <- 'Control.Lens.Tuple._2' '<.=' ninety_nine_bottles_of_beer_on_the_wall
+-- @
+--
+-- If you do not need a copy of the intermediate result, then using @l '.=' d@ will avoid unused binding warnings.
+--
+-- @
+-- ('<.=') :: 'MonadState' s m => 'Setter' s s a b    -> b -> m b
+-- ('<.=') :: 'MonadState' s m => 'Iso' s s a b       -> b -> m b
+-- ('<.=') :: 'MonadState' s m => 'Lens' s s a b      -> b -> m b
+-- ('<.=') :: 'MonadState' s m => 'Traversal' s s a b -> b -> m b
+-- @
+(<!=) :: MonadState s m => ASetter s s a b -> b -> m b
+l <!= b = do
+  l != b
+  return b
+{-# INLINE (<!=) #-}
+
+-- | Set 'Just' a value with pass-through
+--
+-- This is useful for chaining assignment without round-tripping through your 'Monad' stack.
+--
+-- @
+-- do x <- 'Control.Lens.At.at' "foo" '<?=' ninety_nine_bottles_of_beer_on_the_wall
+-- @
+--
+-- If you do not need a copy of the intermediate result, then using @l '?=' d@ will avoid unused binding warnings.
+--
+-- @
+-- ('<?=') :: 'MonadState' s m => 'Setter' s s a ('Maybe' b)    -> b -> m b
+-- ('<?=') :: 'MonadState' s m => 'Iso' s s a ('Maybe' b)       -> b -> m b
+-- ('<?=') :: 'MonadState' s m => 'Lens' s s a ('Maybe' b)      -> b -> m b
+-- ('<?=') :: 'MonadState' s m => 'Traversal' s s a ('Maybe' b) -> b -> m b
+-- @
+(<?!=) :: MonadState s m => ASetter s s a (Maybe b) -> b -> m b
+l <?!= b = do
+  l ?!= b
+  return b
+{-# INLINE (<?!=) #-}
+
+-- | Modify the target(s) of a 'Lens'', 'Iso', 'Setter' or 'Traversal' by using @('<>')@.
+--
+-- >>> execState (do _1 <>= Sum c; _2 <>= Product d) (Sum a,Product b)
+-- (Sum {getSum = a + c},Product {getProduct = b * d})
+--
+-- >>> execState (both <>= "!!!") ("hello","world")
+-- ("hello!!!","world!!!")
+--
+-- @
+-- ('<>=') :: ('MonadState' s m, 'Semigroup' a) => 'Setter'' s a -> a -> m ()
+-- ('<>=') :: ('MonadState' s m, 'Semigroup' a) => 'Iso'' s a -> a -> m ()
+-- ('<>=') :: ('MonadState' s m, 'Semigroup' a) => 'Lens'' s a -> a -> m ()
+-- ('<>=') :: ('MonadState' s m, 'Semigroup' a) => 'Traversal'' s a -> a -> m ()
+-- @
+(<>!=) :: (MonadState s m, Semigroup a) => ASetter' s a -> a -> m ()
+l <>!= a = State.modify' (l <>~ a)
+{-# INLINE (<>!=) #-}
 
 -----------------------------------------------------------------------------
 -- Writer Operations
